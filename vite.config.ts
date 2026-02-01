@@ -3,8 +3,8 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
-  // ▼▼▼ 重要: GitHub Pages用の設定 ▼▼▼
-  base: './', 
+  // 重要: GitHub Pagesでのパスずれ防止
+  base: './',
   build: {
     outDir: 'dist',
     emptyOutDir: true,
