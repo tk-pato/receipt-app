@@ -1,8 +1,12 @@
-
 {
   "name": "mf-cloud-receipt-video-analyzer",
   "private": true,
   "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
   "dependencies": {
     "@google/genai": "^0.2.1",
     "lucide-react": "^0.468.0",
