@@ -1,0 +1,7 @@
+{
+  "name": "MF Receipt Analyzer Pro",
+  "description": "A high-performance receipt analysis tool that uses Gemini 3 to extract accounting data from receipt videos and images for Money Forward Cloud compatibility.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
