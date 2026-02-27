@@ -1,8 +1,8 @@
 
-import React, { useState, useEffect } from 'react';
-import { Trash2, CheckCircle, Maximize2, ImageIcon, Loader2, Users, CreditCard, Banknote } from 'lucide-react';
+import React, { useState } from 'react';
+import { Trash2, CheckCircle, Maximize2, ImageIcon, Loader2, Users, CreditCard, Banknote, Check, X } from 'lucide-react';
 import { AnalysisResult, ReceiptData } from '../types';
-import { MF_ACCOUNT_ITEMS, DEFAULT_MEMBERS } from '../constants';
+import { MF_ACCOUNT_ITEMS } from '../constants';
 import AccountTitleSelector from './AccountTitleSelector';
 
 interface ReceiptGridProps {
@@ -18,8 +18,7 @@ const ReceiptCard: React.FC<{
   onUpdate: (id: string, data: ReceiptData) => void;
   onDelete: (id: string) => void;
   onSelect: (id: string) => void;
-  participantPool: string[];
-}> = ({ result, onUpdate, onDelete, onSelect, participantPool }) => {
+}> = ({ result, onUpdate, onDelete, onSelect }) => {
   const [thumbUrl, setThumbUrl] = useState<string | null>(null);
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
   
@@ -42,16 +41,11 @@ const ReceiptCard: React.FC<{
 
   const data = result.data || {} as ReceiptData;
   const isMeeting = data.accountTitle?.trim() === '会議費';
+  const invoiceRegex = /^T\d{13}$/;
+  const effectiveQualified = data.isQualifiedInvoice ?? !!(data.invoiceId && invoiceRegex.test(data.invoiceId));
 
   const handleChange = (field: keyof ReceiptData, value: any) => {
     onUpdate(result.id, { ...data, [field]: value });
-  };
-
-  const handleAddParticipantText = (name: string) => {
-    const current = data.participants || "";
-    const newValue = current ? `${current}, ${name}` : name;
-    handleChange('participants', newValue);
-    handleChange('peopleCount', (data.peopleCount || 0) + 1);
   };
 
   return (
@@ -106,10 +100,10 @@ const ReceiptCard: React.FC<{
           <div className="grid grid-cols-2 gap-6 relative">
             <div className="col-span-1">
               <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-[0.2em]">Category</label>
-              <AccountTitleSelector 
-                value={data.accountTitle?.trim() || ''} 
+              <AccountTitleSelector
+                value={data.accountTitle?.trim() || ''}
                 onChange={(val) => handleChange('accountTitle', val)}
-                onToggle={setIsSelectorOpen} 
+                onToggle={setIsSelectorOpen}
               />
             </div>
             <div className="col-span-1">
@@ -121,26 +115,37 @@ const ReceiptCard: React.FC<{
             </div>
           </div>
 
+          <div>
+            <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-[0.2em]">適格事業者</label>
+            <div className="flex bg-white/40 border border-white/50 rounded-xl p-1 gap-1 shadow-inner">
+              <button
+                onClick={() => handleChange('isQualifiedInvoice', true)}
+                className={`flex-1 py-2 flex items-center justify-center gap-1 transition-all rounded-lg text-[10px] font-black ${effectiveQualified ? 'bg-white text-emerald-700 shadow-md' : 'text-slate-300 hover:text-slate-500'}`}
+              >
+                <Check className="w-3 h-3" /> 適格
+              </button>
+              <button
+                onClick={() => handleChange('isQualifiedInvoice', false)}
+                className={`flex-1 py-2 flex items-center justify-center gap-1 transition-all rounded-lg text-[10px] font-black ${!effectiveQualified ? 'bg-white text-red-500 shadow-md' : 'text-slate-300 hover:text-slate-500'}`}
+              >
+                <X className="w-3 h-3" /> 非適格
+              </button>
+            </div>
+          </div>
+
           {isMeeting && (
             <div className="pt-6 border-t border-white/50 space-y-4 relative z-0">
               <div className="flex justify-between items-center">
                 <label className="block text-[10px] font-black text-slate-600 uppercase tracking-[0.2em] flex items-center gap-2"><Users className="w-4 h-4" /> Participants</label>
-                <span className="text-[10px] font-black bg-slate-900 text-white px-3 py-1 rounded-full">{data.peopleCount || 1} People</span>
+                <span className="text-[10px] font-black bg-slate-900 text-white px-3 py-1 rounded-full">{data.peopleCount ?? 0} People</span>
               </div>
-              <textarea 
-                rows={2} 
-                value={data.participants || ''} 
-                onChange={(e) => handleChange('participants', e.target.value)} 
-                placeholder="List members..." 
+              <textarea
+                rows={2}
+                value={data.participants || ''}
+                onChange={(e) => handleChange('participants', e.target.value)}
+                placeholder="参加者の氏名をカンマ区切りで入力..."
                 className="w-full p-3 bg-white/40 rounded-xl border-2 border-transparent focus:border-slate-300 outline-none text-[11px] font-bold shadow-inner placeholder:text-slate-300 transition-all"
               />
-              <div className="flex flex-wrap gap-2">
-                {participantPool.map(name => (
-                  <button key={name} onClick={() => handleAddParticipantText(name)} className="px-3 py-1.5 rounded-lg text-[9px] font-black transition-all bg-white/60 border border-white/60 text-slate-400 hover:border-slate-900 hover:text-slate-900">
-                    + {name}
-                  </button>
-                ))}
-              </div>
             </div>
           )}
         </div>
@@ -150,17 +155,10 @@ const ReceiptCard: React.FC<{
 };
 
 const ReceiptGrid: React.FC<ReceiptGridProps> = ({ results, onUpdate, onDelete, onSelect }) => {
-  const [participantPool, setParticipantPool] = useState<string[]>([]);
-
-  useEffect(() => {
-    const saved = localStorage.getItem('mf_participant_pool');
-    setParticipantPool(saved ? JSON.parse(saved) : DEFAULT_MEMBERS);
-  }, []);
-
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 overflow-visible">
       {results.map((result) => (
-        <ReceiptCard key={result.id} result={result} onUpdate={onUpdate} onDelete={onDelete} onSelect={onSelect} participantPool={participantPool} />
+        <ReceiptCard key={result.id} result={result} onUpdate={onUpdate} onDelete={onDelete} onSelect={onSelect} />
       ))}
     </div>
   );
