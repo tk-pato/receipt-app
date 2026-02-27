@@ -41,6 +41,8 @@ const IndividualReview: React.FC<IndividualReviewProps> = ({
   if (!data) return null;
 
   const showParticipants = data.accountTitle?.trim() === '会議費';
+  const invoiceRegex = /^T\d{13}$/;
+  const effectiveQualified = data.isQualifiedInvoice ?? !!(data.invoiceId && invoiceRegex.test(data.invoiceId));
 
   const handleChange = (field: keyof ReceiptData, value: any) => {
     onUpdate(result.id, { ...data, [field]: value });
@@ -111,6 +113,24 @@ const IndividualReview: React.FC<IndividualReviewProps> = ({
                   <option value="8">8% Reduced</option>
                   <option value="none">Exempt/N/A</option>
                 </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase mb-3 tracking-widest"><ShieldCheck className="w-4 h-4" />適格事業者</label>
+              <div className="flex bg-white/40 p-1.5 rounded-2xl gap-2 border border-white/50 shadow-inner">
+                <button
+                  onClick={() => handleChange('isQualifiedInvoice', true)}
+                  className={`flex-1 py-3 rounded-xl flex items-center justify-center gap-2 transition-all font-black text-xs ${effectiveQualified ? 'bg-white text-emerald-700 shadow-md border border-emerald-100' : 'text-slate-400 hover:text-slate-600'}`}
+                >
+                  <Check className="w-4 h-4" /> 適格事業者
+                </button>
+                <button
+                  onClick={() => handleChange('isQualifiedInvoice', false)}
+                  className={`flex-1 py-3 rounded-xl flex items-center justify-center gap-2 transition-all font-black text-xs ${!effectiveQualified ? 'bg-white text-red-500 shadow-md border border-red-100' : 'text-slate-400 hover:text-slate-600'}`}
+                >
+                  <X className="w-4 h-4" /> 非適格事業者
+                </button>
               </div>
             </div>
 

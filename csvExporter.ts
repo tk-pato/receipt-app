@@ -18,8 +18,9 @@ export const generateMFCSVContent = (data: ReceiptData[]): string => {
       debitTaxCategory = "課税仕入 8%";
     }
 
-    // 借方インボイス
-    const isEligible = !!(item.invoiceId && invoiceRegex.test(item.invoiceId) && item.taxRateType !== 'none');
+    // 借方インボイス（isQualifiedInvoice が明示設定されていればそれを優先、未設定ならinvoiceIdから判定）
+    const autoEligible = !!(item.invoiceId && invoiceRegex.test(item.invoiceId));
+    const isEligible = (item.isQualifiedInvoice ?? autoEligible) && item.taxRateType !== 'none';
     const debitInvoiceStatus = isEligible ? "適格" : "対象外";
 
     // 貸方勘定科目

@@ -15,6 +15,7 @@ export interface ReceiptData {
   accountTitle?: string;
   paymentMethod?: 'card' | 'cash';
   invoiceId?: string; // インボイス登録番号
+  isQualifiedInvoice?: boolean; // 適格事業者フラグ
   peopleCount: number;
   participants?: string;
   remarks?: string; // 備考

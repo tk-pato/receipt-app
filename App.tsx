@@ -201,16 +201,17 @@ const App: React.FC = () => {
                 status: 'success',
                 timestampSeconds: item.timestampSeconds,
                 frameBlob: frameBlob,
-                data: { 
-                  ...item, 
+                data: {
+                  ...item,
                   accountTitle: sanitizeAccountTitle(item.accountTitle),
-                  taxRateType: item.taxRateType || '10', 
-                  currency: 'JPY', 
-                  items: [], 
-                  paymentMethod: item.paymentMethod || "cash", 
-                  peopleCount: item.peopleCount || 1, 
-                  taxAmount: 0, 
-                  remarks: item.remarks || "" 
+                  taxRateType: item.taxRateType || '10',
+                  currency: 'JPY',
+                  items: [],
+                  paymentMethod: item.paymentMethod || "cash",
+                  peopleCount: item.peopleCount || 1,
+                  taxAmount: 0,
+                  remarks: item.remarks || "",
+                  isQualifiedInvoice: item.isQualifiedInvoice ?? !!(item.invoiceId && /^T\d{13}$/.test(item.invoiceId))
                 }
               };
               
@@ -230,12 +231,13 @@ const App: React.FC = () => {
             res.id === tempId ? { 
               ...res, 
               status: 'success', 
-              data: { 
-                ...data, 
+              data: {
+                ...data,
                 accountTitle: sanitizeAccountTitle(data.accountTitle),
-                taxRateType: data.taxRateType || '10', 
-                paymentMethod: data.paymentMethod || 'cash' 
-              }, 
+                taxRateType: data.taxRateType || '10',
+                paymentMethod: data.paymentMethod || 'cash',
+                isQualifiedInvoice: data.isQualifiedInvoice ?? !!(data.invoiceId && /^T\d{13}$/.test(data.invoiceId))
+              },
               frameBlob: blob 
             } : res
           ));

@@ -90,6 +90,7 @@ const receiptSchema = {
     invoiceId: { type: Type.STRING, description: "T+13 digits" },
     accountTitle: { type: Type.STRING, description: `勘定科目: ${MF_ACCOUNT_ITEMS.join(", ")}` },
     paymentMethod: { type: Type.STRING },
+    isQualifiedInvoice: { type: Type.BOOLEAN, description: "true if T+13 digit invoice registration number (適格請求書発行事業者番号) is visible on the receipt" },
     remarks: { type: Type.STRING },
   },
   required: ["shopName", "transactionDate", "amount", "accountTitle"],
