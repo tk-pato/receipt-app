@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Trash2, CheckCircle, Maximize2, ImageIcon, Loader2, Users, CreditCard, Banknote, Check, X } from 'lucide-react';
 import { AnalysisResult, ReceiptData } from '../types';
 import { MF_ACCOUNT_ITEMS } from '../constants';
