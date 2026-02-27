@@ -13,14 +13,21 @@ import { analyzeReceipt, analyzeReceiptVideo } from './services/geminiService';
 import { generateMFCSVContent } from './csvExporter';
 import { AnalysisResult, ReceiptData } from './types';
 import { loadReceiptsFromDB, saveReceiptsToDB, deleteEntireDB } from './utils/db';
+import { MF_ACCOUNT_ITEMS } from './constants';
 import ReceiptGrid from './components/ReceiptGrid';
 import IndividualReview from './components/IndividualReview';
 import Header from './components/Header';
 import FileUploader from './components/FileUploader';
-// ▼▼▼ 追加 ▼▼▼
 import ChatAssistant from './components/ChatAssistant';
 
-const LAST_BUILD_DATE = "2026.01.25 15:30 (CHAT ENABLED)";
+const LAST_BUILD_DATE = "2026.02.02 01:20 (DYNAMIC ZIP NAME & SYNC)";
+
+const sanitizeAccountTitle = (title?: string): string => {
+  if (!title) return "雑費";
+  const trimmed = title.trim();
+  const matched = MF_ACCOUNT_ITEMS.find(item => item === trimmed);
+  return matched || "雑費";
+};
 
 const normalizeImage = (file: File | Blob): Promise<Blob> => {
   return new Promise((resolve, reject) => {
@@ -28,7 +35,7 @@ const normalizeImage = (file: File | Blob): Promise<Blob> => {
     const url = URL.createObjectURL(file);
     img.onload = () => {
       const canvas = document.createElement('canvas');
-      const maxDim = 1024; // 軽量化: 1600 -> 1024
+      const maxDim = 1280;
       let width = img.width;
       let height = img.height;
       if (width > maxDim || height > maxDim) {
@@ -45,7 +52,7 @@ const normalizeImage = (file: File | Blob): Promise<Blob> => {
       const ctx = canvas.getContext('2d');
       if (!ctx) {
         URL.revokeObjectURL(url);
-        reject(new Error("Canvas error"));
+        reject(new Error("Canvas context failed"));
         return;
       }
       ctx.imageSmoothingEnabled = true;
@@ -54,10 +61,10 @@ const normalizeImage = (file: File | Blob): Promise<Blob> => {
       canvas.toBlob((blob) => {
         URL.revokeObjectURL(url);
         if (blob) resolve(blob);
-        else reject(new Error("Normalization failed"));
+        else reject(new Error("Blob normalization failed"));
       }, 'image/jpeg', 0.9);
     };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Load error")); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Image load failed")); };
     img.src = url;
   });
 };
@@ -70,7 +77,7 @@ const extractFrame = (file: File, time: number): Promise<Blob> => {
     video.preload = 'auto';
     video.muted = true;
     video.playsInline = true;
-    video.crossOrigin = "anonymous"; // iOS対策
+    video.crossOrigin = "anonymous"; 
 
     const cleanup = () => {
       URL.revokeObjectURL(url);
@@ -79,24 +86,25 @@ const extractFrame = (file: File, time: number): Promise<Blob> => {
 
     const timeoutId = setTimeout(() => {
       cleanup();
-      reject(new Error("抽出タイムアウト"));
-    }, 20000);
+      reject(new Error("Sync Capture Timeout"));
+    }, 25000);
 
-    video.onloadeddata = () => {
+    video.onloadedmetadata = () => {
       video.currentTime = Math.max(0, Math.min(time, video.duration));
     };
 
     video.onseeked = () => {
       clearTimeout(timeoutId);
+      // 指示通り600ms待機し、デコーダの描画を完全に安定させる
       setTimeout(() => {
         try {
           const canvas = document.createElement('canvas');
-          const maxDim = 600; // 軽量化: 1200 -> 600
+          const maxDim = 1280; 
           const scale = maxDim / Math.max(video.videoWidth, video.videoHeight);
           canvas.width = video.videoWidth * scale;
           canvas.height = video.videoHeight * scale;
           const ctx = canvas.getContext('2d', { alpha: false });
-          if (!ctx) throw new Error("Canvas error");
+          if (!ctx) throw new Error("Context failed");
           
           ctx.imageSmoothingEnabled = true;
           ctx.imageSmoothingQuality = 'high';
@@ -104,21 +112,19 @@ const extractFrame = (file: File, time: number): Promise<Blob> => {
           canvas.toBlob((blob) => {
             cleanup();
             if (blob) resolve(blob);
-            else reject(new Error("Blob extraction failed"));
-          }, 'image/jpeg', 0.8); 
+            else reject(new Error("Frame blob failed"));
+          }, 'image/jpeg', 0.9);
         } catch (err) {
           cleanup();
           reject(err);
         }
-      }, 500); 
+      }, 600); 
     };
 
     video.onerror = () => {
       cleanup();
-      reject(new Error("動画デコードエラー"));
+      reject(new Error("Video decoding failed"));
     };
-
-    video.load();
   });
 };
 
@@ -129,14 +135,14 @@ const App: React.FC = () => {
   const [isDBReady, setIsDBReady] = useState(false);
   const [reviewingIndex, setReviewingIndex] = useState<number | null>(null);
   const [globalError, setGlobalError] = useState<string | null>(null);
+  const [lastSourceFileName, setLastSourceFileName] = useState<string>("");
   const analysisAborted = useRef(false);
 
   useEffect(() => {
     loadReceiptsFromDB().then(data => {
       setResults(data || []);
       setIsDBReady(true);
-    }).catch(err => {
-      console.error("DB Load Error", err);
+    }).catch(() => {
       setIsDBReady(true);
     });
   }, []);
@@ -145,6 +151,18 @@ const App: React.FC = () => {
     if (isDBReady) saveReceiptsToDB(results);
   }, [results, isDBReady]);
 
+  const handleSystemReset = async () => {
+    if (!confirm("全てのデータを削除しますか？")) return;
+    try {
+      setIsDBReady(false);
+      setResults([]);
+      await deleteEntireDB();
+      window.location.reload();
+    } catch (e) {
+      window.location.reload();
+    }
+  };
+
   const handleFilesSelected = useCallback(async (selectedFiles: File[]) => {
     setIsAnalyzing(true);
     setGlobalError(null);
@@ -152,72 +170,80 @@ const App: React.FC = () => {
 
     for (const file of selectedFiles) {
       if (analysisAborted.current) break;
-
+      setLastSourceFileName(file.name);
       const isVideo = file.name.toLowerCase().endsWith('.mp4');
-      const tempId = crypto.randomUUID();
       
-      setStatusMessage(isVideo ? `動画をスキャン中: ${file.name}` : `レシートを解析中: ${file.name}`);
-
-      setResults(prev => [{
-        id: tempId,
-        fileName: file.name,
-        data: null,
-        status: 'processing'
-      }, ...prev]);
-
+      setStatusMessage(isVideo ? `AIが全領収書を特定中（重複排除）...` : `領収書を解析中...`);
+      
       try {
         if (isVideo) {
+          // 1. AI解析（18:15 仕様の de-duplication 命令含む）
           const videoResults = await analyzeReceiptVideo(file);
-          const processedResults: AnalysisResult[] = [];
+          const totalFound = videoResults.length;
           
-          for (let i = 0; i < videoResults.length; i++) {
+          if (totalFound === 0) continue;
+
+          // 2. 逐次同期抽出（カウンター復元）
+          let currentCount = 1;
+          for (const item of videoResults) {
             if (analysisAborted.current) break;
-            const item = videoResults[i];
-            setStatusMessage(`領収書を抽出中 (${i + 1}/${videoResults.length})...`);
+            
+            // カウンター表示の更新
+            setStatusMessage(`抽出中: ${currentCount} / ${totalFound} 件目 [${item.shopName || '不明'}]`);
             
             try {
+              // 600ms待機付きの抽出
               const frameBlob = await extractFrame(file, item.timestampSeconds);
-              processedResults.push({
+              
+              const newResult: AnalysisResult = {
                 id: crypto.randomUUID(),
                 fileName: `${file.name} (${item.timestampSeconds.toFixed(1)}s)`,
                 status: 'success',
                 timestampSeconds: item.timestampSeconds,
                 frameBlob: frameBlob,
-                data: {
-                  ...item,
-                  taxRateType: '10',
-                  currency: 'JPY',
-                  items: [],
-                  paymentMethod: item.paymentMethod || "cash",
-                  peopleCount: item.peopleCount || 1,
-                  taxAmount: 0,
-                  remarks: item.remarks || ""
+                data: { 
+                  ...item, 
+                  accountTitle: sanitizeAccountTitle(item.accountTitle),
+                  taxRateType: item.taxRateType || '10', 
+                  currency: 'JPY', 
+                  items: [], 
+                  paymentMethod: item.paymentMethod || "cash", 
+                  peopleCount: item.peopleCount || 1, 
+                  taxAmount: 0, 
+                  remarks: item.remarks || "" 
                 }
-              });
+              };
+              
+              setResults(prev => [newResult, ...prev]);
+              currentCount++;
             } catch (err) {
-              console.warn("Frame extraction failed", err);
+              console.error("Frame extraction error:", err);
+              continue; 
             }
           }
-
-          setResults(prev => {
-            const filtered = prev.filter(r => r.id !== tempId);
-            return [...processedResults, ...filtered];
-          });
         } else {
+          const tempId = crypto.randomUUID();
+          setResults(prev => [{ id: tempId, fileName: file.name, data: null, status: 'processing' }, ...prev]);
           const blob = await normalizeImage(file);
-          const data = await analyzeReceipt(new File([blob], "normalized.jpg", { type: 'image/jpeg' }));
+          const data = await analyzeReceipt(new File([blob], "receipt.jpg", { type: 'image/jpeg' }));
           setResults(prev => prev.map(res => 
-            res.id === tempId ? { ...res, status: 'success', data: { ...data, taxRateType: '10', paymentMethod: data.paymentMethod || 'cash' }, frameBlob: blob } : res
+            res.id === tempId ? { 
+              ...res, 
+              status: 'success', 
+              data: { 
+                ...data, 
+                accountTitle: sanitizeAccountTitle(data.accountTitle),
+                taxRateType: data.taxRateType || '10', 
+                paymentMethod: data.paymentMethod || 'cash' 
+              }, 
+              frameBlob: blob 
+            } : res
           ));
         }
       } catch (error: any) {
-        setResults(prev => prev.map(res => 
-          res.id === tempId ? { ...res, status: 'error', error: error.message } : res
-        ));
-        setGlobalError(`${file.name}: ${error.message}`);
+        setGlobalError(`${file.name}: 解析エラーが発生しました。`);
       }
     }
-    
     setIsAnalyzing(false);
     setStatusMessage("");
   }, []);
@@ -227,21 +253,24 @@ const App: React.FC = () => {
     if (success.length === 0) return;
 
     const zip = new JSZip();
-    zip.file("MFクラウド仕訳.csv", generateMFCSVContent(success.map(r => r.data!)));
+    zip.file("MF_Import.csv", generateMFCSVContent(success.map(r => r.data!)));
     const imgFolder = zip.folder("images");
-    
     success.forEach((res, i) => {
       if (res.frameBlob && imgFolder) {
-        const dateStr = (res.data?.transactionDate || '00000000').replace(/-/g, '');
-        const shop = (res.data?.shopName || 'unknown').replace(/[\\/:*?"<>|]/g, '').substring(0, 20);
-        imgFolder.file(`${(i + 1).toString().padStart(3, '0')}_${dateStr}_${shop}.jpg`, res.frameBlob);
+        const dStr = (res.data?.transactionDate || '00000000').replace(/-/g, '');
+        const shop = (res.data?.shopName || 'shop').substring(0, 10);
+        imgFolder.file(`${(i + 1).toString().padStart(3, '0')}_${dStr}_${shop}.jpg`, res.frameBlob);
       }
     });
+
+    // ZIPファイル名を入力ファイル名に合わせる（拡張子除去）
+    const baseName = lastSourceFileName ? lastSourceFileName.split('.')[0] : `Receipts_${new Date().getTime()}`;
+    const zipName = `${baseName}_Export.zip`;
 
     const content = await zip.generateAsync({ type: "blob" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(content);
-    link.download = `MF_Cloud_Export_${new Date().toISOString().slice(0, 10)}.zip`;
+    link.download = zipName;
     link.click();
   };
 
@@ -250,122 +279,69 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 pb-20 font-sans selection:bg-blue-100 selection:text-blue-900">
+    <div className="min-h-screen flex flex-col bg-slate-50/20 pb-20 font-sans selection:bg-slate-200 selection:text-slate-900">
       <Header lastBuild={LAST_BUILD_DATE} />
       <main className="flex-grow container mx-auto px-4 py-8 max-w-6xl">
         {globalError && (
-          <div className="mb-6 bg-red-50 border-l-4 border-red-500 p-5 rounded-r-2xl flex items-center justify-between shadow-xl animate-in slide-in-from-top-4">
+          <div className="mb-6 glass-card bg-red-50/40 border-l-4 border-red-400 p-5 rounded-r-2xl flex items-center justify-between shadow-lg animate-in slide-in-from-top-4">
             <div className="flex items-center gap-4">
               <AlertCircle className="w-6 h-6 text-red-500" />
-              <p className="text-sm font-bold text-red-800">{globalError}</p>
+              <p className="text-sm font-semibold text-red-800">{globalError}</p>
             </div>
-            <button onClick={() => setGlobalError(null)} className="text-red-300 hover:text-red-500 transition-colors">
-              <XCircle className="w-6 h-6" />
-            </button>
+            <button onClick={() => setGlobalError(null)} className="text-red-300 hover:text-red-500"><XCircle className="w-6 h-6" /></button>
           </div>
         )}
-
         {!isDBReady ? (
           <div className="flex flex-col items-center justify-center h-[60vh] text-slate-300">
-            <Loader2 className="w-12 h-12 animate-spin mb-4 text-slate-200" />
-            <p className="text-xs font-black uppercase tracking-[0.2em] animate-pulse">Initializing Secure Storage...</p>
+            <Loader2 className="w-12 h-12 animate-spin mb-4 text-slate-400" />
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] animate-pulse">Initializing Terminal...</p>
           </div>
         ) : (
           <>
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
               <div className="flex items-center gap-3">
-                <span className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] bg-white px-5 py-2.5 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-2">
-                  <FileCheck className="w-4 h-4 text-blue-500" /> Analysis Dashboard
+                <span className="glass-card text-[11px] font-black text-slate-500 uppercase tracking-widest px-5 py-2.5 rounded-2xl flex items-center gap-2">
+                  <FileCheck className="w-4 h-4 text-slate-600" /> Accounting Hub
                 </span>
-                {results.length > 0 && (
-                  <span className="text-[11px] font-black text-blue-600 bg-blue-50 px-4 py-2.5 rounded-2xl border border-blue-100">
-                    {results.length} Total items
-                  </span>
-                )}
+                {results.length > 0 && <span className="text-[11px] font-black text-slate-700 bg-slate-200/50 px-4 py-2 rounded-xl backdrop-blur-sm">{results.length} items</span>}
               </div>
-              <button 
-                onClick={() => { if(confirm("保存されたデータをすべて削除しますか？")) deleteEntireDB().then(() => window.location.reload()); }} 
-                className="flex items-center gap-2 px-6 py-3 bg-white text-slate-400 text-[10px] font-black rounded-2xl hover:text-red-600 hover:bg-red-50 border border-slate-100 active:scale-95 transition-all shadow-sm group"
-              >
-                <ShieldAlert className="w-4 h-4 group-hover:animate-bounce" /> SYSTEM RESET
+              <button onClick={handleSystemReset} className="glass-card text-[10px] font-black text-slate-400 hover:text-red-600 flex items-center gap-2 px-5 py-2.5 rounded-xl transition-all active:scale-95">
+                <ShieldAlert className="w-4 h-4" /> EMERGENCY RESET
               </button>
             </div>
-
             <div className="mb-12 relative">
               <FileUploader onFilesSelected={handleFilesSelected} disabled={isAnalyzing} />
               {isAnalyzing && (
-                <div className="absolute inset-0 bg-white/80 backdrop-blur-lg rounded-[3rem] flex flex-col items-center justify-center z-30 border-2 border-blue-100 shadow-2xl animate-in fade-in duration-500">
-                  <div className="relative">
-                    <Loader2 className="w-20 h-20 animate-spin text-blue-600" />
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="w-8 h-8 bg-blue-600 rounded-full animate-pulse" />
-                    </div>
-                  </div>
-                  <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tighter mt-8 mb-2">Analyzing Assets</h3>
-                  <p className="text-sm font-bold text-blue-500 animate-pulse">{statusMessage}</p>
+                <div className="absolute inset-0 bg-white/40 backdrop-blur-2xl rounded-[3.5rem] flex flex-col items-center justify-center z-30 border border-white/50 shadow-2xl animate-in fade-in">
+                  <Loader2 className="w-20 h-20 animate-spin text-slate-800" />
+                  <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tighter mt-8 mb-2">Analyzing Data</h3>
+                  <p className="text-sm font-bold text-slate-500 animate-pulse">{statusMessage}</p>
                 </div>
               )}
             </div>
-
             {results.length > 0 && (
               <div className="space-y-12">
-                <div className="relative group">
-                  <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-[3.5rem] blur opacity-15 group-hover:opacity-25 transition duration-1000 group-hover:duration-200"></div>
-                  <div className="relative flex flex-wrap justify-between items-center bg-white p-10 md:p-14 rounded-[3.5rem] border border-slate-100 shadow-2xl gap-8">
-                    <div className="flex items-center gap-8">
-                      <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-8 rounded-[2.5rem] shadow-blue-200 shadow-2xl">
-                        <Download className="w-10 h-10 text-white" />
-                      </div>
-                      <div>
-                         <h2 className="text-4xl font-black italic uppercase tracking-tighter text-slate-900 leading-tight">Export<br/>Center</h2>
-                         <div className="flex items-center gap-2 mt-2">
-                           <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                           <p className="text-[11px] font-black text-green-600 uppercase tracking-widest">{results.filter(r => r.status === 'success').length} records ready for Money Forward</p>
-                         </div>
-                      </div>
+                <div className="glass-card p-10 md:p-14 rounded-[3.5rem] flex flex-wrap justify-between items-center gap-8 group border border-white/60 shadow-2xl">
+                  <div className="flex items-center gap-8">
+                    <div className="bg-slate-900 p-8 rounded-[2.5rem] shadow-2xl group-hover:scale-105 transition-transform"><Download className="w-10 h-10 text-white" /></div>
+                    <div>
+                       <h2 className="text-4xl font-black italic uppercase tracking-tighter text-slate-900 leading-tight">Archive<br/>Export</h2>
+                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2">Ready to zip: {results.filter(r => r.status === 'success').length} items</p>
                     </div>
-                    <button 
-                      onClick={exportZip} 
-                      disabled={!results.some(r => r.status === 'success')} 
-                      className="px-16 py-8 bg-slate-900 text-white font-black rounded-[2.5rem] hover:bg-black shadow-2xl active:translate-y-1 active:shadow-sm transition-all flex items-center gap-4 border-b-8 border-black group disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <Save className="w-6 h-6 group-hover:scale-110 transition-transform" /> 
-                      CSV & 画像一括保存 (ZIP)
-                    </button>
                   </div>
+                  <button onClick={exportZip} disabled={!results.some(r => r.status === 'success')} className="px-16 py-8 bg-slate-900 text-white font-black rounded-[2.5rem] hover:bg-black shadow-2xl active:translate-y-1 transition-all flex items-center gap-4 group disabled:opacity-50 border-b-4 border-slate-700">
+                    <Save className="w-6 h-6" /> Download ZIP Archive
+                  </button>
                 </div>
-                
-                <div className="pt-4">
-                  <ReceiptGrid 
-                    results={results} 
-                    onUpdate={updateResultData} 
-                    onDelete={(id) => setResults(prev => prev.filter(r => r.id !== id))} 
-                    onRetry={() => {}} 
-                    onSelect={(id) => {
-                      const idx = results.findIndex(r => r.id === id);
-                      if (idx !== -1) setReviewingIndex(idx);
-                    }} 
-                  />
-                </div>
+                <ReceiptGrid results={results} onUpdate={updateResultData} onDelete={(id) => setResults(prev => prev.filter(r => r.id !== id))} onRetry={() => {}} onSelect={(id) => { const idx = results.findIndex(r => r.id === id); if (idx !== -1) setReviewingIndex(idx); }} />
               </div>
             )}
           </>
         )}
       </main>
-
       {reviewingIndex !== null && results[reviewingIndex] && (
-        <IndividualReview
-          result={results[reviewingIndex]}
-          currentIndex={reviewingIndex}
-          totalCount={results.length}
-          onClose={() => setReviewingIndex(null)}
-          onPrev={() => setReviewingIndex(p => p !== null && p > 0 ? p - 1 : p)}
-          onNext={() => setReviewingIndex(p => p !== null && p < results.length - 1 ? p + 1 : p)}
-          onUpdate={updateResultData}
-        />
+        <IndividualReview result={results[reviewingIndex]} currentIndex={reviewingIndex} totalCount={results.length} onClose={() => setReviewingIndex(null)} onPrev={() => setReviewingIndex(p => p !== null && p > 0 ? p - 1 : p)} onNext={() => setReviewingIndex(p => p !== null && p < results.length - 1 ? p + 1 : p)} onUpdate={updateResultData} />
       )}
-      
-      {/* ▼▼▼ 追加：AIチャットアシスタント ▼▼▼ */}
       <ChatAssistant />
     </div>
   );

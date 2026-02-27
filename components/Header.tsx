@@ -1,5 +1,5 @@
 import React from 'react';
-import { Camera, Database } from 'lucide-react';
+import { Camera } from 'lucide-react';
 
 interface HeaderProps {
   lastBuild: string;
@@ -7,29 +7,26 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ lastBuild }) => {
   return (
-    <header className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
-      <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="bg-blue-600 p-2 rounded-lg">
+    <header className="sticky top-0 z-40 bg-white/40 backdrop-blur-xl border-b border-white/30">
+      <div className="container mx-auto px-6 h-20 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div className="bg-slate-900 p-2.5 rounded-2xl shadow-xl shadow-slate-200">
             <Camera className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h1 className="text-xl font-bold tracking-tight text-gray-900 leading-none">
-              MF Receipt Analyzer <span className="text-blue-600">Pro</span>
+            <h1 className="text-xl font-black tracking-tighter text-slate-900 leading-none">
+              Receipt <span className="text-slate-500 italic">Vision</span>
             </h1>
-            <p className="text-[10px] text-gray-500 font-medium uppercase mt-0.5 tracking-wider">
-              Powered by Patolaqshe
-            </p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Intelligent Ledger</p>
           </div>
         </div>
-        
-        <div className="flex items-center gap-4">
-          <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-full border border-gray-100">
-            <Database className="w-3.5 h-3.5 text-green-500" />
-            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Memory Guard Active</span>
+        <div className="flex items-center gap-6">
+          <div className="hidden md:flex items-center gap-2 px-4 py-2 bg-slate-100/50 rounded-full border border-white/40 backdrop-blur-sm">
+            <div className="w-2 h-2 bg-slate-400 rounded-full animate-pulse" />
+            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Processing Core</span>
           </div>
-          <span className="text-gray-300 font-bold text-[9px] whitespace-nowrap">
-            Last Build: {lastBuild}
+          <span className="text-slate-300 font-black text-[10px] whitespace-nowrap hidden sm:block italic">
+            v.{lastBuild}
           </span>
         </div>
       </div>
