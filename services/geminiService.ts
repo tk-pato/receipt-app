@@ -3,7 +3,7 @@ import { ReceiptData } from "../types";
 
 // ▼▼▼ APIキー設定（確実に動作させるためハードコードに戻す） ▼▼▼
 const API_KEY = "AIzaSyBbgOEFVXtitNuyMdEU_jlSj2TddDD5Mcs"; 
-const MODEL_NAME = "gemini-3-flash-preview";
+const MODEL_NAME = "gemini-2.0-flash";
 
 /**
  * 動画からフレームを抽出する（軽量化版）
