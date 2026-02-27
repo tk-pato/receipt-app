@@ -157,7 +157,7 @@ export const consultAccountant = async (msg: string, hist: any[]): Promise<strin
     { role: 'user', parts: [{ text: msg }] }
   ];
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-3.1-pro-preview',
     contents,
     config: { systemInstruction: "経理のプロとして、 Money Forward Cloud への入力に関する相談に答えてください。" }
   });
