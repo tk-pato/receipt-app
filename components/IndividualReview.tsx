@@ -4,7 +4,7 @@ import {
   ChevronLeft, ChevronRight, X, Check, Calendar, Store, ShieldCheck, Info, Percent, Users, CreditCard, Banknote, Plus, Minus, MessageSquare
 } from 'lucide-react';
 import { AnalysisResult, ReceiptData } from '../types';
-import { MF_ACCOUNT_ITEMS, DEFAULT_MEMBERS } from '../constants';
+import { MF_ACCOUNT_ITEMS } from '../constants';
 import AccountTitleSelector from './AccountTitleSelector';
 
 interface IndividualReviewProps {
@@ -21,9 +21,8 @@ const IndividualReview: React.FC<IndividualReviewProps> = ({
   result, currentIndex, totalCount, onClose, onPrev, onNext, onUpdate
 }) => {
   const [imgUrl, setImgUrl] = useState<string | null>(null);
-  const [participantPool, setParticipantPool] = useState<string[]>([]);
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
-  
+
   useEffect(() => {
     if (result.frameBlob) {
       const url = URL.createObjectURL(result.frameBlob);
@@ -31,11 +30,6 @@ const IndividualReview: React.FC<IndividualReviewProps> = ({
       return () => URL.revokeObjectURL(url);
     }
   }, [result.frameBlob, result.id]);
-
-  useEffect(() => {
-    const saved = localStorage.getItem('mf_participant_pool');
-    setParticipantPool(saved ? JSON.parse(saved) : DEFAULT_MEMBERS);
-  }, []);
 
   const data = result.data;
   if (!data) return null;
@@ -48,16 +42,9 @@ const IndividualReview: React.FC<IndividualReviewProps> = ({
     onUpdate(result.id, { ...data, [field]: value });
   };
 
-  const handleAddParticipant = (name: string) => {
-    const current = data.participants || "";
-    const newValue = current ? `${current}, ${name}` : name;
-    handleChange('participants', newValue);
-    handleChange('peopleCount', (data.peopleCount || 0) + 1);
-  };
-
   const handleCountChange = (delta: number) => {
-    const currentCount = data.peopleCount || 1;
-    const newCount = Math.max(1, currentCount + delta);
+    const currentCount = data.peopleCount || 0;
+    const newCount = Math.max(0, currentCount + delta);
     handleChange('peopleCount', newCount);
   };
 
@@ -161,12 +148,12 @@ const IndividualReview: React.FC<IndividualReviewProps> = ({
                         <span className="text-[10px] font-black text-slate-400">Headcount:</span>
                         <div className="flex items-center bg-white/60 rounded-lg border border-white/80">
                           <button onClick={() => handleCountChange(-1)} className="p-2 text-slate-600 hover:bg-white transition-colors"><Minus className="w-4 h-4" /></button>
-                          <input 
-                            type="number" 
-                            min="1" 
-                            value={data.peopleCount || 1} 
-                            onChange={(e) => handleChange('peopleCount', parseInt(e.target.value) || 1)} 
-                            className="w-12 text-center font-black text-slate-900 outline-none py-2 bg-transparent" 
+                          <input
+                            type="number"
+                            min="0"
+                            value={data.peopleCount ?? 0}
+                            onChange={(e) => handleChange('peopleCount', parseInt(e.target.value) || 0)}
+                            className="w-12 text-center font-black text-slate-900 outline-none py-2 bg-transparent"
                           />
                           <button onClick={() => handleCountChange(1)} className="p-2 text-slate-600 hover:bg-white transition-colors"><Plus className="w-4 h-4" /></button>
                         </div>
@@ -179,13 +166,6 @@ const IndividualReview: React.FC<IndividualReviewProps> = ({
                       placeholder="参加者の氏名をカンマ区切りで入力..." 
                       className="w-full p-4 bg-white/60 rounded-2xl border border-white/60 outline-none text-sm font-bold placeholder:text-slate-300"
                     />
-                    <div className="flex flex-wrap gap-2">
-                      {participantPool.map(name => (
-                        <button key={name} onClick={() => handleAddParticipant(name)} className="px-3 py-1.5 rounded-xl text-[10px] font-black transition-all bg-white/80 border border-white/80 text-slate-400 hover:border-slate-900 hover:text-slate-900">
-                          + {name}
-                        </button>
-                      ))}
-                    </div>
                  </div>
               ) : (
                 <div className="space-y-4">

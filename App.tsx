@@ -95,7 +95,7 @@ const extractFrame = (file: File, time: number): Promise<Blob> => {
 
     video.onseeked = () => {
       clearTimeout(timeoutId);
-      // 指示通り600ms待機し、デコーダの描画を完全に安定させる
+      // デコーダ安定待機（最小限）
       setTimeout(() => {
         try {
           const canvas = document.createElement('canvas');
@@ -118,7 +118,7 @@ const extractFrame = (file: File, time: number): Promise<Blob> => {
           cleanup();
           reject(err);
         }
-      }, 600); 
+      }, 80);
     };
 
     video.onerror = () => {
@@ -208,7 +208,7 @@ const App: React.FC = () => {
                   currency: 'JPY',
                   items: [],
                   paymentMethod: item.paymentMethod || "cash",
-                  peopleCount: item.peopleCount || 1,
+                  peopleCount: item.peopleCount ?? 0,
                   taxAmount: 0,
                   remarks: item.remarks || "",
                   isQualifiedInvoice: item.isQualifiedInvoice ?? !!(item.invoiceId && /^T\d{13}$/.test(item.invoiceId))

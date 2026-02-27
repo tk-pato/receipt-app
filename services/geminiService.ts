@@ -6,7 +6,7 @@ import { MF_ACCOUNT_ITEMS } from "../constants";
  * 解析用フレーム抽出 (18:15 最適化モデル)
  * 動画全体を網羅するように 20 枚を等間隔で抽出
  */
-const extractFramesForAnalysis = async (videoFile: File, maxFrames: number = 20, minInterval: number = 0.6): Promise<{data: string, timestamp: number}[]> => {
+const extractFramesForAnalysis = async (videoFile: File, maxFrames: number = 12, minInterval: number = 0.5): Promise<{data: string, timestamp: number}[]> => {
   return new Promise((resolve, reject) => {
     const video = document.createElement('video');
     const url = URL.createObjectURL(videoFile);
@@ -39,7 +39,7 @@ const extractFramesForAnalysis = async (videoFile: File, maxFrames: number = 20,
           await new Promise<void>(r => {
             const onSeeked = () => {
               video.removeEventListener('seeked', onSeeked);
-              setTimeout(r, 400); 
+              setTimeout(r, 80);
             };
             video.addEventListener('seeked', onSeeked);
           });
@@ -116,7 +116,7 @@ export const analyzeReceipt = async (file: File): Promise<ReceiptData> => {
 
 export const analyzeReceiptVideo = async (videoFile: File): Promise<any[]> => {
   const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
-  const frames = await extractFramesForAnalysis(videoFile, 20, 0.6);
+  const frames = await extractFramesForAnalysis(videoFile, 12, 0.5);
   
   const parts: any[] = [
     { text: `【18:15 最適化命令：全件特定・重複排除】
