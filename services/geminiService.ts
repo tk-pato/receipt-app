@@ -96,7 +96,7 @@ const receiptSchema = {
   required: ["shopName", "transactionDate", "amount", "accountTitle"],
 };
 
-const MODEL_NAME = 'gemini-3-flash-preview';
+const MODEL_NAME = 'gemini-2.0-flash';
 
 export const analyzeReceipt = async (file: File): Promise<ReceiptData> => {
   const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
@@ -158,7 +158,7 @@ export const consultAccountant = async (msg: string, hist: any[]): Promise<strin
     { role: 'user', parts: [{ text: msg }] }
   ];
   const response = await ai.models.generateContent({
-    model: 'gemini-3.1-pro-preview',
+    model: 'gemini-2.0-flash',
     contents,
     config: { systemInstruction: "経理のプロとして、 Money Forward Cloud への入力に関する相談に答えてください。" }
   });
